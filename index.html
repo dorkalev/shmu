@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shooting Game</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #f0f0f0; }
+    #game { 
+      position: relative; 
+      width: 800px; 
+      height: 400px; 
+      margin: 20px auto; 
+      background: url('beach.gif');
+      background-size: cover;
+      background-position: center;
+      border: 2px solid #000; 
+    }
+    .player {
+      position: absolute;
+      width: 150px; height: 150px;
+      bottom: 100px; /* Raised by 100px from bottom */
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center bottom;
+      transition: bottom 0.5s ease-out; /* Longer transition for jump */
+    }
+    #p1 { 
+      left: 50px; 
+      transform: scaleX(-1); /* Flip horizontally for left player */
+    }
+    #p2 { right: 50px; }
+    .shot {
+      position: absolute;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      transition: bottom 0.2s linear;
+      background: green; /* Set all shots to green */
+    }
+    #controls { margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h2>Shooting Game</h2>
+  <button onclick="startGame(true)">1 Player</button>
+  <button onclick="startGame(false)">2 Players</button>
+  <div id="game">
+    <div id="p1" class="player"></div>
+    <div id="p2" class="player"></div>
+  </div>
+  <div id="controls">
+    <p>Player 1: W (Jump), S (Dock), D (Shoot), E (Dock+Shoot)</p>
+    <p id="p2Controls">Player 2: I (Jump), K (Dock), J (Shoot), L (Dock+Shoot)</p>
+  </div>
+
+  <script>
+    // Player state images
+    const playerImages = {
+      idle: 'stand.png',
+      jumping: 'jump.png',
+      docking: 'dock.png',
+      shooting: 'shoot up.png',
+      dockShooting: 'docking and shooting.png',
+      hit: 'surprise.png'
+    };
+
+    let p1 = { el: document.getElementById('p1'), x: 50, hp: 3, state: 'idle' };
+    let p2 = { el: document.getElementById('p2'), x: 650, hp: 3, state: 'idle' };
+    let shots = [];
+    let isSinglePlayer = true;
+    const BASE_HEIGHT = 40; // Base height from bottom (in px)
+    const JUMP_HEIGHT = 80; // Pixels to move up during jump
+    const DOCK_HEIGHT = 30; // How low a player goes when docking
+    const JUMP_DURATION = 1000; // Jump animation duration in ms (1 second)
+    const ACTION_DURATION = 500; // Normal action duration in ms
+    
+    // Track pressed keys
+    const pressedKeys = {};
+
+    function updatePlayerState(player, state) {
+      player.state = state;
+      player.el.style.backgroundImage = `url('${playerImages[state]}')`;
+      
+      // Handle jump animation
+      if (state === 'jumping') {
+        player.el.style.bottom = `${BASE_HEIGHT + JUMP_HEIGHT}px`;
+      } else if (state === 'docking' || state === 'dockShooting') {
+        player.el.style.bottom = `${BASE_HEIGHT - DOCK_HEIGHT}px`;
+      } else if (state === 'idle' || state === 'shooting' || state === 'hit') {
+        player.el.style.bottom = `${BASE_HEIGHT}px`;
+      }
+    }
+
+    function startGame(single) {
+      isSinglePlayer = single;
+      p1.hp = 3;
+      p2.hp = 3;
+      updatePlayerState(p1, 'idle');
+      updatePlayerState(p2, 'idle');
+      shots.forEach(s => s.el.remove());
+      shots = [];
+    }
+
+    function shoot(from, to) {
+      const el = document.createElement('div');
+      el.className = 'shot';
+      el.style.left = (from.x + 40) + 'px';
+      
+      // Adjust shot height based on shooter's state
+      let shotHeight;
+      if (from.state === 'jumping') {
+        shotHeight = BASE_HEIGHT + JUMP_HEIGHT + 80;
+      } else if (from.state === 'docking' || from.state === 'dockShooting') {
+        shotHeight = BASE_HEIGHT - DOCK_HEIGHT + 30; // Lower shot when docking
+      } else {
+        shotHeight = BASE_HEIGHT + 80; // Default shot height
+      }
+      
+      el.style.bottom = `${shotHeight}px`;
+      document.getElementById('game').appendChild(el);
+
+      let shot = { 
+        el, 
+        dir: to.x > from.x ? 5 : -5, 
+        target: to,
+        height: shotHeight // Store shot height for collision detection
+      };
+      shots.push(shot);
+    }
+
+    function updateShots() {
+      shots.forEach((s, i) => {
+        let pos = parseInt(s.el.style.left);
+        pos += s.dir;
+        s.el.style.left = pos + 'px';
+
+        // Collision
+        let tx = s.target.x + 40;
+        if (Math.abs(pos - tx) < 20) {
+          // Check if shot can hit based on target's state
+          let canHit = true;
+          
+          // Jumping player avoids normal and low shots
+          if (s.target.state === 'jumping' && s.height < BASE_HEIGHT + JUMP_HEIGHT + 30) {
+            canHit = false;
+          }
+          
+          // Docking player avoids normal shots but can be hit by low shots
+          if ((s.target.state === 'docking' || s.target.state === 'dockShooting') && 
+              s.height > BASE_HEIGHT - DOCK_HEIGHT + 40) {
+            canHit = false;
+          }
+          
+          if (canHit) {
+            s.target.hp--;
+            updatePlayerState(s.target, 'hit');
+            
+            // Reset to idle after hit animation
+            setTimeout(() => {
+              if (s.target.hp > 0) {
+                updatePlayerState(s.target, 'idle');
+              }
+            }, ACTION_DURATION);
+            
+            if (s.target.hp <= 0) {
+              alert(s.target === p1 ? 'Player 2 Wins!' : 'Player 1 Wins!');
+              startGame(isSinglePlayer);
+            }
+          }
+          
+          // Remove shot regardless of hit
+          s.el.remove();
+          shots.splice(i, 1);
+        }
+      });
+    }
+
+    // Check player state based on keys
+    function updatePlayerStates() {
+      // Player 1 state checks
+      if (pressedKeys['s']) {
+        // Priority: Docking with shooting if D key is also pressed, otherwise just docking
+        if (pressedKeys['d']) {
+          updatePlayerState(p1, 'dockShooting');
+        } else {
+          updatePlayerState(p1, 'docking');
+        }
+      } else if (pressedKeys['w']) {
+        updatePlayerState(p1, 'jumping');
+      } else if (p1.state !== 'hit' && p1.state !== 'shooting' && p1.state !== 'dockShooting') {
+        // Return to idle only if not in an active animation
+        updatePlayerState(p1, 'idle');
+      }
+      
+      // Player 2 state checks (only in 2 player mode)
+      if (!isSinglePlayer) {
+        if (pressedKeys['k']) {
+          // Priority: Docking with shooting if J key is also pressed, otherwise just docking
+          if (pressedKeys['j']) {
+            updatePlayerState(p2, 'dockShooting');
+          } else {
+            updatePlayerState(p2, 'docking');
+          }
+        } else if (pressedKeys['i']) {
+          updatePlayerState(p2, 'jumping');
+        } else if (p2.state !== 'hit' && p2.state !== 'shooting' && p2.state !== 'dockShooting') {
+          // Return to idle only if not in an active animation
+          updatePlayerState(p2, 'idle');
+        }
+      }
+    }
+
+    setInterval(updateShots, 50);
+    setInterval(updatePlayerStates, 100); // Regularly check player states based on pressed keys
+
+    document.addEventListener('keydown', (e) => {
+      pressedKeys[e.key] = true;
+      
+      // Handle one-time actions like shooting
+      if (e.key === 'd' && !pressedKeys['s']) {
+        updatePlayerState(p1, 'shooting');
+        shoot(p1, p2);
+        setTimeout(() => {
+          if (p1.state === 'shooting') { // Only reset if still shooting (not docking)
+            updatePlayerState(p1, 'idle');
+          }
+        }, ACTION_DURATION);
+      }
+      
+      if (e.key === 'e' || (e.key === 'd' && pressedKeys['s'])) {
+        updatePlayerState(p1, 'dockShooting');
+        shoot(p1, p2);
+        setTimeout(() => {
+          if (p1.state === 'dockShooting') { // Only reset if still dock-shooting
+            updatePlayerState(p1, 'docking');
+          }
+        }, ACTION_DURATION);
+      }
+
+      if (!isSinglePlayer) {
+        if (e.key === 'j' && !pressedKeys['k']) {
+          updatePlayerState(p2, 'shooting');
+          shoot(p2, p1);
+          setTimeout(() => {
+            if (p2.state === 'shooting') { // Only reset if still shooting (not docking)
+              updatePlayerState(p2, 'idle');
+            }
+          }, ACTION_DURATION);
+        }
+        
+        if (e.key === 'l' || (e.key === 'j' && pressedKeys['k'])) {
+          updatePlayerState(p2, 'dockShooting');
+          shoot(p2, p1);
+          setTimeout(() => {
+            if (p2.state === 'dockShooting') { // Only reset if still dock-shooting
+              updatePlayerState(p2, 'docking');
+            }
+          }, ACTION_DURATION);
+        }
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      pressedKeys[e.key] = false;
+    });
+
+    // Simple AI for player 2
+    setInterval(() => {
+      if (isSinglePlayer && p2.hp > 0) {
+        // Randomly choose between regular shooting and dock-shooting
+        const action = Math.random() > 0.7 ? 'dockShooting' : 'shooting';
+        updatePlayerState(p2, action);
+        shoot(p2, p1);
+        setTimeout(() => updatePlayerState(p2, 'idle'), ACTION_DURATION);
+      }
+    }, 2000);
+
+    // Initialize player states
+    updatePlayerState(p1, 'idle');
+    updatePlayerState(p2, 'idle');
+  </script>
+</body>
+</html>
