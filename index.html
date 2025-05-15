@@ -2,18 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Shooting Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shmu vs Shmu</title>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #f0f0f0; }
+    body { 
+      font-family: sans-serif; 
+      text-align: center; 
+      background: #f0f0f0; 
+      margin: 0;
+      padding: 10px;
+    }
     #game { 
       position: relative; 
-      width: 800px; 
+      width: 95vw; 
+      max-width: 800px;
       height: 400px; 
       margin: 20px auto; 
       background: url('beach.gif');
       background-size: cover;
       background-position: center;
       border: 2px solid #000; 
+      overflow: hidden; /* Add this to contain the overlay */
     }
     .player {
       position: absolute;
@@ -37,19 +46,146 @@
       background: green; /* Set all shots to green */
     }
     #controls { margin-top: 10px; }
+    .mobile-controls {
+      display: flex;
+      justify-content: center;
+      margin: 15px 0;
+      gap: 15px;
+    }
+    .control-area {
+      width: 48%;
+      max-width: 400px;
+    }
+    .btn {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 0;
+      margin: 5px;
+      width: 70px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .btn-small {
+      font-size: 10px;
+      padding: 8px 0;
+    }
+    .btn:active {
+      background: #3e8e41;
+      transform: translateY(2px);
+    }
+    
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+      #game {
+        height: 300px;
+      }
+      .player {
+        width: 100px;
+        height: 100px;
+      }
+      #p1 {
+        left: 20px;
+      }
+      #p2 {
+        right: 20px;
+      }
+      .btn {
+        width: 60px;
+        padding: 15px 0;
+        font-size: 14px;
+      }
+    }
+    
+    #game-mode-buttons {
+      margin-bottom: 15px;
+    }
+    #game-mode-buttons button {
+      margin: 0 5px;
+      padding: 8px 15px;
+    }
+    #message-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      font-family: 'Courier New', monospace;
+      color: white;
+      text-shadow: 2px 2px 0 #000;
+      flex-direction: column;
+      display: none;
+    }
+    
+    #message-text {
+      font-size: 40px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 20px;
+      font-weight: bold;
+      text-align: center;
+      padding: 0 20px;
+    }
+    
+    #restart-hint {
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
-  <h2>Shooting Game</h2>
-  <button onclick="startGame(true)">1 Player</button>
-  <button onclick="startGame(false)">2 Players</button>
+  <h2>Shmu vs Shmu</h2>
+  <div id="game-mode-buttons">
+    <button onclick="startGame('cpu')">CPU vs CPU</button>
+    <button onclick="startGame('single')">1 Player</button>
+    <button onclick="startGame('multi')">2 Players</button>
+  </div>
   <div id="game">
     <div id="p1" class="player"></div>
     <div id="p2" class="player"></div>
   </div>
+  
+  <div class="mobile-controls">
+    <div class="control-area" id="p1-controls">
+      <h3>Player 1</h3>
+      <div>
+        <button class="btn" id="p1-jump">Jump</button>
+      </div>
+      <div>
+        <button class="btn" id="p1-dock">Dock</button>
+        <button class="btn" id="p1-shoot">Shoot</button>
+        <button class="btn btn-small" id="p1-dock-shoot">Dock<br>+Shoot</button>
+      </div>
+    </div>
+    
+    <div class="control-area" id="p2-controls">
+      <h3>Player 2</h3>
+      <div>
+        <button class="btn" id="p2-jump">Jump</button>
+      </div>
+      <div>
+        <button class="btn" id="p2-dock">Dock</button>
+        <button class="btn" id="p2-shoot">Shoot</button>
+        <button class="btn btn-small" id="p2-dock-shoot">Dock<br>+Shoot</button>
+      </div>
+    </div>
+  </div>
+  
   <div id="controls">
     <p>Player 1: W (Jump), S (Dock), D (Shoot), E (Dock+Shoot)</p>
     <p id="p2Controls">Player 2: I (Jump), K (Dock), J (Shoot), L (Dock+Shoot)</p>
+  </div>
+
+  <div id="message-overlay">
+    <div id="message-text">Player 1 Wins!</div>
+    <div id="restart-hint">Press ESC or Click to Restart</div>
   </div>
 
   <script>
@@ -66,7 +202,7 @@
     let p1 = { el: document.getElementById('p1'), x: 50, hp: 3, state: 'idle' };
     let p2 = { el: document.getElementById('p2'), x: 650, hp: 3, state: 'idle' };
     let shots = [];
-    let isSinglePlayer = true;
+    let gameMode = 'cpu'; // Default to CPU vs CPU
     const BASE_HEIGHT = 40; // Base height from bottom (in px)
     const JUMP_HEIGHT = 80; // Pixels to move up during jump
     const DOCK_HEIGHT = 30; // How low a player goes when docking
@@ -75,6 +211,71 @@
     
     // Track pressed keys
     const pressedKeys = {};
+    
+    // Set up mobile touch controls
+    document.getElementById('p1-jump').addEventListener('click', () => handleMobileControl('p1', 'jump'));
+    document.getElementById('p1-dock').addEventListener('click', () => handleMobileControl('p1', 'dock'));
+    document.getElementById('p1-shoot').addEventListener('click', () => handleMobileControl('p1', 'shoot'));
+    document.getElementById('p1-dock-shoot').addEventListener('click', () => handleMobileControl('p1', 'dockShoot'));
+    
+    document.getElementById('p2-jump').addEventListener('click', () => handleMobileControl('p2', 'jump'));
+    document.getElementById('p2-dock').addEventListener('click', () => handleMobileControl('p2', 'dock'));
+    document.getElementById('p2-shoot').addEventListener('click', () => handleMobileControl('p2', 'shoot'));
+    document.getElementById('p2-dock-shoot').addEventListener('click', () => handleMobileControl('p2', 'dockShoot'));
+    
+    function handleMobileControl(player, action) {
+      // Only process player 1 controls if not in CPU mode
+      if (player === 'p1' && gameMode === 'cpu') return;
+      
+      // Only process player 2 controls if in multi mode
+      if (player === 'p2' && gameMode !== 'multi') return;
+      
+      const playerObj = player === 'p1' ? p1 : p2;
+      const opponent = player === 'p1' ? p2 : p1;
+      
+      switch(action) {
+        case 'jump':
+          updatePlayerState(playerObj, 'jumping');
+          setTimeout(() => {
+            if (playerObj.state === 'jumping') updatePlayerState(playerObj, 'idle');
+          }, JUMP_DURATION);
+          break;
+        case 'dock':
+          updatePlayerState(playerObj, 'docking');
+          break;
+        case 'shoot':
+          updatePlayerState(playerObj, 'shooting');
+          shoot(playerObj, opponent);
+          setTimeout(() => {
+            if (playerObj.state === 'shooting') updatePlayerState(playerObj, 'idle');
+          }, ACTION_DURATION);
+          break;
+        case 'dockShoot':
+          updatePlayerState(playerObj, 'dockShooting');
+          shoot(playerObj, opponent);
+          setTimeout(() => {
+            if (playerObj.state === 'dockShooting') updatePlayerState(playerObj, 'docking');
+          }, ACTION_DURATION);
+          break;
+      }
+    }
+
+    // Update mobile control visibility based on game mode
+    function updateMobileControls() {
+      const p1Controls = document.getElementById('p1-controls');
+      const p2Controls = document.getElementById('p2-controls');
+      
+      if (gameMode === 'cpu') {
+        p1Controls.style.opacity = '0.5';
+        p2Controls.style.opacity = '0.5';
+      } else if (gameMode === 'single') {
+        p1Controls.style.opacity = '1';
+        p2Controls.style.opacity = '0.5';
+      } else { // multi
+        p1Controls.style.opacity = '1';
+        p2Controls.style.opacity = '1';
+      }
+    }
 
     function updatePlayerState(player, state) {
       player.state = state;
@@ -90,20 +291,32 @@
       }
     }
 
-    function startGame(single) {
-      isSinglePlayer = single;
+    function startGame(mode) {
+      gameMode = mode;
       p1.hp = 3;
       p2.hp = 3;
       updatePlayerState(p1, 'idle');
       updatePlayerState(p2, 'idle');
       shots.forEach(s => s.el.remove());
       shots = [];
+      updateMobileControls();
     }
 
     function shoot(from, to) {
       const el = document.createElement('div');
       el.className = 'shot';
-      el.style.left = (from.x + 40) + 'px';
+      
+      // Fix shot starting position
+      let shotX;
+      if (from === p1) {
+        shotX = parseInt(from.el.style.left) + from.el.offsetWidth/2;
+      } else {
+        // For player 2, calculate position from right side
+        const gameWidth = document.getElementById('game').offsetWidth;
+        shotX = gameWidth - parseInt(from.el.style.right) - from.el.offsetWidth/2;
+      }
+      
+      el.style.left = shotX + 'px';
       
       // Adjust shot height based on shooter's state
       let shotHeight;
@@ -117,10 +330,20 @@
       
       el.style.bottom = `${shotHeight}px`;
       document.getElementById('game').appendChild(el);
+      
+      // Determine correct direction based on visual positions, not stored x values
+      let fromPos, toPos;
+      if (from === p1) {
+        fromPos = parseInt(from.el.style.left);
+        toPos = document.getElementById('game').offsetWidth - parseInt(to.el.style.right);
+      } else {
+        fromPos = document.getElementById('game').offsetWidth - parseInt(from.el.style.right);
+        toPos = parseInt(to.el.style.left);
+      }
 
       let shot = { 
         el, 
-        dir: to.x > from.x ? 5 : -5, 
+        dir: fromPos < toPos ? 5 : -5, 
         target: to,
         height: shotHeight // Store shot height for collision detection
       };
@@ -133,9 +356,16 @@
         pos += s.dir;
         s.el.style.left = pos + 'px';
 
-        // Collision
-        let tx = s.target.x + 40;
-        if (Math.abs(pos - tx) < 20) {
+        // Collision detection based on visual positions
+        let targetPos;
+        if (s.target === p1) {
+          targetPos = parseInt(s.target.el.style.left) + s.target.el.offsetWidth/2;
+        } else {
+          const gameWidth = document.getElementById('game').offsetWidth;
+          targetPos = gameWidth - parseInt(s.target.el.style.right) - s.target.el.offsetWidth/2;
+        }
+
+        if (Math.abs(pos - targetPos) < 20) {
           // Check if shot can hit based on target's state
           let canHit = true;
           
@@ -162,12 +392,18 @@
             }, ACTION_DURATION);
             
             if (s.target.hp <= 0) {
-              alert(s.target === p1 ? 'Player 2 Wins!' : 'Player 1 Wins!');
-              startGame(isSinglePlayer);
+              showMessage(s.target === p1 ? 'Player 2 Wins!' : 'Player 1 Wins!');
             }
           }
           
           // Remove shot regardless of hit
+          s.el.remove();
+          shots.splice(i, 1);
+        }
+        
+        // Remove shots that exit the game area
+        const gameWidth = document.getElementById('game').offsetWidth;
+        if (pos < 0 || pos > gameWidth) {
           s.el.remove();
           shots.splice(i, 1);
         }
@@ -176,23 +412,25 @@
 
     // Check player state based on keys
     function updatePlayerStates() {
-      // Player 1 state checks
-      if (pressedKeys['s']) {
-        // Priority: Docking with shooting if D key is also pressed, otherwise just docking
-        if (pressedKeys['d']) {
-          updatePlayerState(p1, 'dockShooting');
-        } else {
-          updatePlayerState(p1, 'docking');
+      // Player 1 state checks (only when human-controlled)
+      if (gameMode !== 'cpu') {
+        if (pressedKeys['s']) {
+          // Priority: Docking with shooting if D key is also pressed, otherwise just docking
+          if (pressedKeys['d']) {
+            updatePlayerState(p1, 'dockShooting');
+          } else {
+            updatePlayerState(p1, 'docking');
+          }
+        } else if (pressedKeys['w']) {
+          updatePlayerState(p1, 'jumping');
+        } else if (p1.state !== 'hit' && p1.state !== 'shooting' && p1.state !== 'dockShooting') {
+          // Return to idle only if not in an active animation
+          updatePlayerState(p1, 'idle');
         }
-      } else if (pressedKeys['w']) {
-        updatePlayerState(p1, 'jumping');
-      } else if (p1.state !== 'hit' && p1.state !== 'shooting' && p1.state !== 'dockShooting') {
-        // Return to idle only if not in an active animation
-        updatePlayerState(p1, 'idle');
       }
       
-      // Player 2 state checks (only in 2 player mode)
-      if (!isSinglePlayer) {
+      // Player 2 state checks (only when human-controlled in multi mode)
+      if (gameMode === 'multi') {
         if (pressedKeys['k']) {
           // Priority: Docking with shooting if J key is also pressed, otherwise just docking
           if (pressedKeys['j']) {
@@ -215,28 +453,31 @@
     document.addEventListener('keydown', (e) => {
       pressedKeys[e.key] = true;
       
-      // Handle one-time actions like shooting
-      if (e.key === 'd' && !pressedKeys['s']) {
-        updatePlayerState(p1, 'shooting');
-        shoot(p1, p2);
-        setTimeout(() => {
-          if (p1.state === 'shooting') { // Only reset if still shooting (not docking)
-            updatePlayerState(p1, 'idle');
-          }
-        }, ACTION_DURATION);
-      }
-      
-      if (e.key === 'e' || (e.key === 'd' && pressedKeys['s'])) {
-        updatePlayerState(p1, 'dockShooting');
-        shoot(p1, p2);
-        setTimeout(() => {
-          if (p1.state === 'dockShooting') { // Only reset if still dock-shooting
-            updatePlayerState(p1, 'docking');
-          }
-        }, ACTION_DURATION);
+      // Handle one-time actions like shooting for player 1 (only in non-CPU mode)
+      if (gameMode !== 'cpu') {
+        if (e.key === 'd' && !pressedKeys['s']) {
+          updatePlayerState(p1, 'shooting');
+          shoot(p1, p2);
+          setTimeout(() => {
+            if (p1.state === 'shooting') { // Only reset if still shooting (not docking)
+              updatePlayerState(p1, 'idle');
+            }
+          }, ACTION_DURATION);
+        }
+        
+        if (e.key === 'e' || (e.key === 'd' && pressedKeys['s'])) {
+          updatePlayerState(p1, 'dockShooting');
+          shoot(p1, p2);
+          setTimeout(() => {
+            if (p1.state === 'dockShooting') { // Only reset if still dock-shooting
+              updatePlayerState(p1, 'docking');
+            }
+          }, ACTION_DURATION);
+        }
       }
 
-      if (!isSinglePlayer) {
+      // Handle one-time actions like shooting for player 2 (only in multi mode)
+      if (gameMode === 'multi') {
         if (e.key === 'j' && !pressedKeys['k']) {
           updatePlayerState(p2, 'shooting');
           shoot(p2, p1);
@@ -263,20 +504,135 @@
       pressedKeys[e.key] = false;
     });
 
-    // Simple AI for player 2
+    // AI for player 2 (in single or CPU mode)
     setInterval(() => {
-      if (isSinglePlayer && p2.hp > 0) {
-        // Randomly choose between regular shooting and dock-shooting
-        const action = Math.random() > 0.7 ? 'dockShooting' : 'shooting';
-        updatePlayerState(p2, action);
-        shoot(p2, p1);
-        setTimeout(() => updatePlayerState(p2, 'idle'), ACTION_DURATION);
+      if ((gameMode === 'single' || gameMode === 'cpu') && p2.hp > 0 && p2.state !== 'hit') {
+        // Randomly choose an action
+        const rand = Math.random();
+        let action;
+        
+        if (rand < 0.2) {
+          action = 'jumping';
+          updatePlayerState(p2, action);
+          setTimeout(() => {
+            if (p2.state === 'jumping') updatePlayerState(p2, 'idle');
+          }, JUMP_DURATION);
+        } else if (rand < 0.4) {
+          action = 'docking';
+          updatePlayerState(p2, action);
+          setTimeout(() => {
+            if (p2.state === 'docking') updatePlayerState(p2, 'idle');
+          }, ACTION_DURATION);
+        } else if (rand < 0.7) {
+          action = 'shooting';
+          updatePlayerState(p2, action);
+          shoot(p2, p1);
+          setTimeout(() => {
+            if (p2.state === 'shooting') updatePlayerState(p2, 'idle');
+          }, ACTION_DURATION);
+        } else {
+          action = 'dockShooting';
+          updatePlayerState(p2, action);
+          shoot(p2, p1);
+          setTimeout(() => {
+            if (p2.state === 'dockShooting') updatePlayerState(p2, 'idle');
+          }, ACTION_DURATION);
+        }
       }
     }, 2000);
+    
+    // AI for player 1 (in CPU mode only)
+    setInterval(() => {
+      if (gameMode === 'cpu' && p1.hp > 0 && p1.state !== 'hit') {
+        // Randomly choose an action
+        const rand = Math.random();
+        let action;
+        
+        if (rand < 0.2) {
+          action = 'jumping';
+          updatePlayerState(p1, action);
+          setTimeout(() => {
+            if (p1.state === 'jumping') updatePlayerState(p1, 'idle');
+          }, JUMP_DURATION);
+        } else if (rand < 0.4) {
+          action = 'docking';
+          updatePlayerState(p1, action);
+          setTimeout(() => {
+            if (p1.state === 'docking') updatePlayerState(p1, 'idle');
+          }, ACTION_DURATION);
+        } else if (rand < 0.7) {
+          action = 'shooting';
+          updatePlayerState(p1, action);
+          shoot(p1, p2);
+          setTimeout(() => {
+            if (p1.state === 'shooting') updatePlayerState(p1, 'idle');
+          }, ACTION_DURATION);
+        } else {
+          action = 'dockShooting';
+          updatePlayerState(p1, action);
+          shoot(p1, p2);
+          setTimeout(() => {
+            if (p1.state === 'dockShooting') updatePlayerState(p1, 'idle');
+          }, ACTION_DURATION);
+        }
+      }
+    }, 1800); // Slightly different timing for variety
 
-    // Initialize player states
+    // Initialize player states and start game in CPU vs CPU mode by default
     updatePlayerState(p1, 'idle');
     updatePlayerState(p2, 'idle');
+    startGame('cpu');
+    
+    // Update x positions based on available width
+    function updatePositions() {
+      const gameWidth = document.getElementById('game').offsetWidth;
+      const edgeDistance = Math.min(50, gameWidth * 0.1);
+      
+      p1.x = edgeDistance;
+      p2.x = gameWidth - edgeDistance - p2.el.offsetWidth;
+      
+      p1.el.style.left = p1.x + 'px';
+      p2.el.style.right = edgeDistance + 'px';
+    }
+    
+    // Update positions on load and resize
+    window.addEventListener('load', updatePositions);
+    window.addEventListener('resize', updatePositions);
+
+    function showMessage(message) {
+      const overlay = document.getElementById('message-overlay');
+      document.getElementById('message-text').textContent = message;
+      overlay.style.display = 'flex';
+      
+      // Set timeout to auto-restart after 3 seconds
+      const messageTimer = setTimeout(() => {
+        hideMessage();
+      }, 3000);
+      
+      // Event listener for ESC key
+      const escKeyHandler = (e) => {
+        if (e.key === 'Escape') {
+          hideMessage();
+          document.removeEventListener('keydown', escKeyHandler);
+        }
+      };
+      
+      // Event listener for mouse click
+      const clickHandler = () => {
+        hideMessage();
+        overlay.removeEventListener('click', clickHandler);
+      };
+      
+      document.addEventListener('keydown', escKeyHandler);
+      overlay.addEventListener('click', clickHandler);
+      
+      // Function to hide message and restart game
+      function hideMessage() {
+        clearTimeout(messageTimer);
+        overlay.style.display = 'none';
+        startGame(gameMode);
+      }
+    }
   </script>
 </body>
 </html>
